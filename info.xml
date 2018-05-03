@@ -9,9 +9,9 @@
     <email>endres@systopia.de</email>
   </maintainer>
   <urls>
-    <url desc="Main Extension Page">http://TODO</url>
-    <url desc="Documentation">http://TODO</url>
-    <url desc="Support">http://TODO</url>
+    <url desc="Main Extension Page">https://github.com/systopia/be.aivl.surveypal</url>
+    <url desc="Documentation">https://github.com/systopia/be.aivl.surveypal</url>
+    <url desc="Support">https://github.com/systopia/be.aivl.surveypal/issues</url>
     <url desc="Licensing">http://www.gnu.org/licenses/agpl-3.0.html</url>
   </urls>
   <releaseDate>2018-04-25</releaseDate>
