@@ -34,8 +34,26 @@ function surveypal_civicrm_tokens( &$tokens ) {
  * Hook implementation: New Tokens
  */
 function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = array(), $context = null) {
-  // error_log("CALL: " . json_encode($cids) . ' / ' . json_encode($tokens));
-  if (empty($tokens['surveypal'])) return;
+  //CRM_Core_Error::debug_log_message("SP.tokenValues: cids=" . json_encode($cids) . "\njob: =" . json_encode($job) . "\ntokens: =" . json_encode($tokens) . "\nvalues=" . json_encode($values));
+
+  // extract contact_ids
+  if (is_string($cids)) {
+    $contact_ids = explode(',', $cids);
+  } elseif (isset($cids['contact_id'])) {
+    $contact_ids = array($cids['contact_id']);
+  } elseif (is_array($cids)) {
+    $contact_ids = $cids;
+  } else {
+    error_log("Cannot interpret cids: " . json_encode($cids));
+    return;
+  }
+
+  // make sure there's
+  //  a) any of our surveypal tokens requested
+  //  b) actually any contact_ids provided (otherwise SQL below crashes)
+  if (empty($tokens['surveypal']) || empty($contact_ids)) {
+    return;
+  }
 
   // basic data
   $url_template = 'https://my.surveypal.com/app/form/ext?_d=0&_sid=%s&_k=%s&externalid=%s&email=%s&meta=%s';
@@ -54,7 +72,7 @@ function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = a
   }
 
   // load data
-  $cid_list = implode(',', $cids);
+  $cid_list = implode(',', $contact_ids);
   $query = CRM_Core_DAO::executeQuery("
     SELECT
      civicrm_contact.id         AS cid,
@@ -63,7 +81,8 @@ function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = a
      civicrm_email.email        AS email
     FROM civicrm_contact
     LEFT JOIN civicrm_email ON civicrm_email.contact_id = civicrm_contact.id AND civicrm_email.is_primary=1
-    WHERE civicrm_contact.id IN ({$cid_list});");
+    WHERE civicrm_contact.id IN ({$cid_list})
+    GROUP BY civicrm_contact.id;");
   while ($query->fetch()) {
     // gather metadata
     $metadata = array();
@@ -76,19 +95,29 @@ function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = a
     $metadata_string = urlencode(json_encode($metadata));
 
     foreach ($tokens['surveypal'] as $key => $value) {
-      // there seems to be a difference between indivudual and mass mailings:
+      // there seems to be a difference between individual and mass mailings:
       $token = $job ? $key : $value;
 
       // get survey
       $survey = $survey_index[$token];
 
-      // set value
-      $values[$query->cid]["surveypal.{$token}"] = sprintf($url_template,
-        $survey['id'],
-        $survey['token'],
-        $query->cid,
-        urlencode($query->email),
-        $metadata_string);
+      // define value
+      $token_value = sprintf($url_template,
+          $survey['id'],
+          $survey['token'],
+          $query->cid,
+          urlencode($query->email),
+          $metadata_string);
+
+      if (isset($values['contact_id']) && $values['contact_id'] == $cids) {
+        // there is no outer array. This seems to happen e.g. in org.civicoop.emailapi
+        //  ... and yes, the fetch()-loop only makes sense if there is only one cid,
+        //       but that seems to be the case.
+        $values["surveypal.{$token}"] = $token_value;
+      } else {
+        // this should be the default
+        $values[$query->cid]["surveypal.{$token}"] = $token_value;
+      }
     }
   }
 }
