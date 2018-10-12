@@ -34,7 +34,7 @@ function surveypal_civicrm_tokens( &$tokens ) {
  * Hook implementation: New Tokens
  */
 function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = array(), $context = null) {
-  //CRM_Core_Error::debug_log_message("SP.tokenValues: cids=" . json_encode($cids) . "\njob: =" . json_encode($job) . "\ntokens: =" . json_encode($tokens) . "\nvalues=" . json_encode($values));
+  //CRM_Core_Error::debug_log_message("SP.tokenValues:\ncids=" . json_encode($cids) . "\njob:=" . json_encode($job) . "\ntokens:=" . json_encode($tokens) . "\nvalues:=" . json_encode($values));
 
   // extract contact_ids
   if (is_string($cids)) {
@@ -44,14 +44,14 @@ function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = a
   } elseif (is_array($cids)) {
     $contact_ids = $cids;
   } else {
-    error_log("Cannot interpret cids: " . json_encode($cids));
+    CRM_Core_Error::debug_log_message("Cannot interpret cids: " . json_encode($cids));
     return;
   }
 
   // make sure there's
   //  a) any of our surveypal tokens requested
   //  b) actually any contact_ids provided (otherwise SQL below crashes)
-  if (empty($tokens['surveypal']) || empty($contact_ids)) {
+  if (empty($contact_ids)) {
     return;
   }
 
@@ -94,9 +94,17 @@ function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = a
     }
     $metadata_string = urlencode(json_encode($metadata));
 
-    foreach ($tokens['surveypal'] as $key => $value) {
+    // if tokens are empty, use all of them
+    if (empty($tokens)) {
+      $token_list = array();
+      surveypal_civicrm_tokens($token_list);
+    } else {
+      $token_list = $tokens;
+    }
+
+    foreach ($token_list['surveypal'] as $key => $value) {
       // there seems to be a difference between individual and mass mailings:
-      $token = $job ? $key : $value;
+      $token = ($job || empty($tokens)) ? $key : "surveypal.{$value}";
 
       // get survey
       $survey = $survey_index[$token];
@@ -113,10 +121,10 @@ function surveypal_civicrm_tokenValues(&$values, $cids, $job = null, $tokens = a
         // there is no outer array. This seems to happen e.g. in org.civicoop.emailapi
         //  ... and yes, the fetch()-loop only makes sense if there is only one cid,
         //       but that seems to be the case.
-        $values["surveypal.{$token}"] = $token_value;
+        $values[$token] = $token_value;
       } else {
         // this should be the default
-        $values[$query->cid]["surveypal.{$token}"] = $token_value;
+        $values[$query->cid][$token] = $token_value;
       }
     }
   }
